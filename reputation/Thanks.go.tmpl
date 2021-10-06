@@ -1,0 +1,77 @@
+{{/* Trigger type: Regex */}}
+{{/* Trigger: \A */}}
+
+{{$cID := .Message.ChannelID}}
+{{$uID := .Message.Author.ID}}
+{{$cmd := ""}}
+{{$display := ""}}
+{{$err := ""}}
+{{/* AutoRep Detector */}}
+{{$expire := 180}}
+{{$count_name := (joinStr "" "counter_" $cID)}}
+{{$last := (joinStr "" "last_" $cID)}}
+{{$penultimate := ""}}
+{{$last_user := ""}}
+{{if $db := dbGet 200 $last}}
+	{{if not (eq $uID (toInt $db.Value))}}
+		{{dbSet 201 $last (toString $db.Value)}}{{$penultimate = (dbGet 201 $last).Value}}
+	{{end}}
+	{{dbSet 200 $last (toString $uID)}}{{$last_user = (dbGet 200 $last).Value}}
+{{end}}
+{{$penultimate}}
+{{$last_user}}
+{{if $db := (dbGet $uID $count_name)}}
+	{{$add := add (toInt $db.Value) 1}}
+	{{dbSetExpire $uID $count_name (str $add) 180}}
+{{else}}
+	{{dbSetExpire $uID $count_name 1 $expire}}
+{{end}}
+{{/* Thanks */}}
+{{if $re := reFind "((T|t)hank|^(T|t)y$|^(T|t)y[^\\w]|\\s+(T|t)y\\s+|(T|t)hx)" .Message.Content}}
+	{{if lt (len .Message.Content) 100}}
+		{{$cmd = "giverep"}}
+ 	 	{{if .Message.Mentions}}
+			{{$c_name := "m_cooldown_ping"}}
+			{{$length := 30}}
+			{{if (dbGet $uID $c_name)}}
+				{{sendMessage nil (joinStr "" "Oops... you are still on cooldown for: `" humanizeDurationSeconds ((dbGet $uID $c_name).ExpiresAt.Sub currentTime) "`.\nConsider thanking multiple users at once")}}
+			{{else}}
+				{{dbSetExpire $uID $c_name "cooldown_ping" $length}}
+				{{$mentions := .Message.Mentions}}
+  				{{$IDs:=dict}}
+  				{{if ge (len $mentions) 1}}
+  					{{ $IDs.Set 0 (index $mentions 0)}}
+  					{{if ge (len $mentions) 2}}
+  						{{ $IDs.Set 1 (index $mentions 1)}}
+  						{{if ge (len $mentions) 3}}
+  							{{ $IDs.Set 2 (index $mentions 2)}}
+  						{{end}}
+  					{{end}}
+				{{end}}
+				{{range $IDs}}
+					{{if eq .ID $uID}}{{- $display = printf "%s\t\tYou can't give rep to yourself, silly.\n" $display}}
+  					{{else if (userArg .ID).Bot}}{{- $display = printf "%s\t\tYou can't give rep to bots.\n" $display}}
+					{{else}}{{exec $cmd .}}
+					{{end}}
+				{{end}}
+  				{{sendMessage nil $display}}
+  				{{addReactions ":sparkles:"}}
+ 			{{end}}
+		{{else}}
+			{{$i := dbIncr (toInt $penultimate) $last 3}}
+			{{$skip := false}}
+  			{{$auto_users := dbTopEntries $count_name 5 0}}
+  			{{range $auto_users}}
+  				{{if not $skip}}
+  					{{if and (not (eq .UserID $uID)) (not .User.Bot) (ge (toInt (dbGet .UserID $count_name).Value) 4)}}
+  						{{addReactions ":sparkles:"}}
+						{{exec $cmd (getMember .UserID).User}}
+   						{{$skip = true}}
+	  				{{end}}
+  				{{end}}
+  			{{end}}
+		{{end}}
+	{{end}}
+{{else if $re := reFindAllSubmatches "(\\+(rep)?(\\s)*)(\\d{17,19})" .Message.Content}}
+	{{exec "giverep" (getMember (index $re 0 4)).User}}
+{{end}}

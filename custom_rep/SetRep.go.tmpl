@@ -1,0 +1,46 @@
+{{/* Trigger type: Regex */}}
+{{/* Trigger: \A(-|<@!?204255221017214977>\s*)((set|take|give)\s*rep)(\s+|\z) */}}
+
+{{$name := "rep"}}
+{{$args := parseArgs 2 ""
+	(carg "string" "User")
+	(carg "int" "rep")
+}}
+{{$user := (userArg ($args.Get 0)).ID}}
+{{$username := (userArg $user).Username}}
+{{$int := ($args.Get 1)}}
+{{$cmd := reFind `set|take|give` .Cmd}}
+
+{{$display := ""}}
+
+{{if eq $cmd "set"}}
+	{{if eq $int 0}}
+		{{dbDel $user $name}}
+		{{$display = printf "Deleted `%s` %s" $username $name}}
+	{{else}}
+		{{dbSet $user $name $int}}
+		{{$display = printf "Set `%s's` %s to `%d`" $username $name $int}}
+	{{end}}
+
+{{else if eq $cmd "take"}}
+	{{if (dbGet $user $name)}}
+		{{$i := dbSet $user $name (sub ((dbGet $user $name).Value) $int)}}
+		{{if lt (toInt (dbGet $user $name).Value) 0}}
+			{{dbSet $user $name 0}}
+		{{end}}
+	{{$display = printf "Took `%d` %s from %s, now at `%d`" $int $name $username (toInt (dbGet $user $name).Value)}}
+	{{else}}
+		{{$display = printf "user has no %s" $name}}
+	{{end}}
+
+{{else if eq $cmd "give"}}
+	{{if (dbGet $user $name)}}
+		{{$i := dbIncr $user $name $int}}
+	{{else}}
+		{{dbSet $user $name $int}}
+	{{end}}
+	{{$display = printf "Gave `%d` %s to %s, now at `%d`" $int $name $username (toInt (dbGet $user $name).Value)}}
+
+{{end}}
+
+{{sendMessage nil $display}}

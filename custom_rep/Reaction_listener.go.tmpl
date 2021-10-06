@@ -1,0 +1,42 @@
+{{/* Trigger type: Reaction */}}
+{{/* Trigger: Added Reactions only */}}
+
+{{ $name := "rep"}}
+{{ $action := .Reaction.Emoji.Name }}
+{{ $validEmojis := cslice "▶️" "◀️" }}
+{{ $isValid := false }}
+{{ $page := 0 }}
+{{ with and (eq .ReactionMessage.Author.ID 227731811034202114) .ReactionMessage.Embeds }}
+	{{ $embed := index . 0 }}
+	{{ if and (eq $embed.Title "❯ Leaderboard") $embed.Footer }}
+		{{ $page = reFind `\d+` $embed.Footer.Text }}
+		{{ $isValid = true }}
+	{{ end }}
+{{ end }}
+{{ if and (in $validEmojis $action) $isValid $page }}
+	{{ deleteMessageReaction nil .ReactionMessage.ID .User.ID $action }}
+	{{ if eq $action "▶️" }} {{ $page = add $page 1 }}
+	{{ else }} {{ $page = sub $page 1 }} {{ end }}
+	{{ if ge $page 1 }}
+		{{ $skip := mult (sub $page 1) 10 }}
+		{{ $users := dbTopEntries $name 10 $skip }}
+		{{ if (len $users) }}
+			{{ $rank := $skip }}
+			{{ $display := "" }}
+			{{ range $users }}
+				{{- $rep := toInt .Value }}
+				{{- $rank = add $rank 1 }}
+				{{- $display = printf "%s\n• **%d.** *%d %s* __%s__ "
+					$display $rank $rep $name .User.Username
+				}}
+			{{ end }}
+			{{ editMessage nil .ReactionMessage.ID (cembed
+				"title" "❯ Leaderboard"
+				"thumbnail" (sdict "url" "https://i.imgur.com/mJ7zu6k.png")
+				"color" 14232643
+				"description" $display
+				"footer" (sdict "text" (joinStr "" "Page " $page))
+			) }}
+		{{ end }}
+	{{ end }}
+{{ end }}

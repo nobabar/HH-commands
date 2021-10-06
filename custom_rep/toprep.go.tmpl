@@ -1,0 +1,29 @@
+{{/* Trigger type: Regex */}}
+{{/* Trigger: \A-(toprep|tr|top)(\s+|\z) */}}
+
+{{ $name := "rep" }}
+{{ $page := 1 }}
+{{ with reFind `\d+` (joinStr " " .CmdArgs) }} {{ $page = . | toInt }} {{ end }}
+{{ $skip := mult (sub $page 1) 10 }}
+{{ $users := dbTopEntries $name 10 $skip }}
+{{ if not (len $users) }}
+	There were no users on that page!
+{{ else }}
+	{{ $rank := $skip }}
+	{{ $display := "" }}
+	{{ range $users }}
+		{{- $rep := toInt .Value }}
+		{{- $rank = add $rank 1 }}
+		{{- $display = printf "%s\n• **%d.** *%d %s* __%s__ "
+			$display $rank $rep $name .User.Username
+		}}
+	{{ end }}
+	{{ $id := sendMessageRetID nil (cembed
+		"title" "❯ Leaderboard"
+		"thumbnail" (sdict "url" "https://i.imgur.com/mJ7zu6k.png")
+		"color" 14232643
+		"description" $display
+		"footer" (sdict "text" (joinStr "" "Page " $page))
+	) }}
+	{{ addMessageReactions nil $id "◀️" "▶️" }}
+{{ end }}

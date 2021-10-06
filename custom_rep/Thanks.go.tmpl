@@ -1,0 +1,40 @@
+{{/* Trigger type: Regex */}}
+{{/* Trigger: (thank|^ty$|^ty\s+|\s+ty\s+|thx) */}}
+
+{{$name := "rep"}}
+{{$uID := .Message.Author.ID}}
+{{$globalDict:=dict}}
+
+{{if .Message.Mentions}}
+	{{$c_name := "cooldown_rep"}}
+	{{$length := 30}}
+	{{if $db := (dbGet $uID $c_name)}}
+		{{$id := sendMessageRetID nil "Oops... you are still on cooldown.\nConsider thanking multiple users at once"}}
+		{{deleteMessage nil $id (div (toInt ($db.ExpiresAt.Sub currentTime)) 1000000000)}}
+	{{else}}
+		{{dbSetExpire $uID $c_name "cooldown_ping" $length}}
+
+		{{$mentions := .Message.Mentions}}
+		{{$IDs:=dict}}
+		{{if ge (len $mentions) 1}}
+			{{ $IDs.Set 0 (index $mentions 0).ID}}
+			{{if ge (len $mentions) 2}}
+				{{ $IDs.Set 1 (index $mentions 1).ID}}
+				{{if ge (len $mentions) 3}}
+					{{ $IDs.Set 2 (index $mentions 2).ID}}
+				{{end}}
+			{{end}}
+		{{end}}
+		{{$display := ""}}
+		{{$tab := ""}}
+		{{range $IDs}}
+			{{if eq . $uID}}{{- $display = printf "%s%sYou can't thank yourself...silly\n" $display $tab}}
+			{{else if (userArg .).Bot}}{{- $display = printf "%s%sYou can't thank bots\n" $display $tab}}
+			{{else}}{{if (dbGet . $name)}}{{$i := dbIncr . $name 1}}{{else}}{{dbSet . $name 1}}{{end}}{{- $display = printf "%s%sGave `1` %s to %s (current: `%d`)\n" $display $tab $name (userArg . ).Username (toInt (dbGet . $name).Value) }}
+			{{- $tab = printf "\t\t%s" $tab}}
+			{{end}}
+		{{end}}
+		{{sendMessage nil $display}}
+		{{addReactions "✨"}}
+	{{end}}
+{{end}}

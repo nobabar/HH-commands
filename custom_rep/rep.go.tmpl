@@ -1,0 +1,27 @@
+{{/* Trigger type: Regex */}}
+{{/* Trigger: \A(-|<@!?227731811034202114>\s*)(rep|reputation)(\s+|\z) */}}
+
+{{$name := "rep"}}
+{{$user := 227731811034202114}}
+{{$display := ""}}
+
+{{if .Message.Mentions}}{{$user = (index .Message.Mentions 0).ID}}
+{{else if .CmdArgs}}{{$user = (toInt (joinStr "" .CmdArgs))}}
+{{else}}{{$user = .Message.Author.ID}}
+{{end}}
+{{$display = printf "**%s** has `%d` %s" (userArg $user).Username (toInt (dbGet $user $name).Value) $name}}
+
+{{ $lb := dbTopEntries $name 10 0}}
+{{ $rank := 0 }}
+{{$skip := false}}
+{{ range $lb }}
+	{{- if not $skip}}
+		{{- $rank = add $rank 1 }}
+		{{- if eq .User.ID $user }}
+			{{- $display = printf "%s (#%d)" $display $rank}}
+			{{- $skip = true}}
+		{{- end}}
+	{{- end}}
+{{ end }}
+
+{{sendMessage nil $display}}

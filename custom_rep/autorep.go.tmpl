@@ -1,0 +1,63 @@
+{{/* Trigger type: Regex */}}
+{{/* Trigger: \A */}}
+
+{{$name := "m_rep"}}
+{{$count_name := "m_counter"}}
+{{$uID := .Message.Author.ID}}
+
+{{if (dbGet $uID $count_name)}}
+  {{$i := dbIncr $uID $count_name 1}}
+{{else}}
+  {{dbSetExpire $uID $count_name 1 60}}
+{{end}}
+
+{{$re := reFind "((T|t)hank|^(T|t)y$|^(T|t)y[^\\w]|\\s+(T|t)y\\s+|(T|t)hx)" .Message.Content}}
+{{if $re}}
+  {{if lt (len .Message.Content) 20}}
+  	{{if .Message.Mentions}}
+      {{/*{{$cool_name := "cooldown_m_ping"}}
+    	{{$length := 30}}
+  		{{if (dbGet $uID $cool_name)}}
+  			{{sendMessage nil (joinStr "" "Oops... you are still on cooldown for: " (humanizeDurationSeconds ((dbGet $uID $cool_name).ExpiresAt.Sub currentTime)) ".\nConsider thanking multiple users at once")}}
+  		{{else}}
+  			{{dbSetExpire $uID $cool_name "cooldown_ping" $length}}
+  			{{$mentions := .Message.Mentions}}
+  			{{$IDs:=dict}}
+  			{{if ge (len $mentions) 1}}
+  				{{ $IDs.Set 0 (index $mentions 0).ID}}
+  				{{if ge (len $mentions) 2}}
+  					{{ $IDs.Set 1 (index $mentions 1).ID}}
+  					{{if ge (len $mentions) 3}}
+  						{{ $IDs.Set 2 (index $mentions 2).ID}}
+  					{{end}}
+  				{{end}}
+  			{{end}}
+  			{{$display := ""}}
+  			{{$tab := ""}}
+  			{{range $IDs}}
+  				{{if eq . $uID}}{{- $display = printf "%s%sYou can't thank yourself...silly\n" $display $tab}}
+  				{{else if (userArg .).Bot}}{{- $display = printf "%s%sYou can't thank bots\n" $display $tab}}
+  				{{else}}{{if (dbGet . $name)}}{{$i := dbIncr . $name 1}}{{else}}{{dbSet . $name 1}}{{end}}{{- $display = printf "%s%sGave `1` %s to %s (current: `%d`)\n" $display $tab $name (userArg . ).Username (toInt (dbGet . $name).Value) }}
+  				{{- $tab = printf "%s\t\t" $tab}}
+  			{{end}}
+  			{{sendMessage nil $display}}
+  			{{addReactions "✨"}}
+  		{{end}}
+  	{{end}}*/}}
+  	{{else}}
+  		{{$display := ""}}
+  		{{$skip := false}}
+  		{{$users := dbTopEntries $count_name 5 0}}
+  		{{ range $users }}
+  			{{- if not $skip}}
+  				{{if and (not (eq .User.ID $uID)) (not .User.Bot) (ge (toInt (dbGet .User.ID $count_name).Value) 4) -}}
+  					{{if (dbGet .User.ID $name)}}{{$i := dbIncr .User.ID $name 1}}{{else}}{{dbSet .User.ID $name 1}}{{end}}{{- $display = printf "Gave `1` %s to %s (current: `%d`)\n" $name (userArg .User.ID ).Username (toInt (dbGet .User.ID $name).Value) }}
+   					{{- $skip = true}}
+  				{{end}}
+  			{{end}}
+  		{{end}}
+  		{{sendMessage nil $display}}
+  		{{addReactions "✨"}}
+  	{{end}}
+  {{end}}
+{{end}}

@@ -1,0 +1,182 @@
+{{/* Trigger type : Regex */}}
+{{/*Trigger : "(-queue)\s+(help|show|enter|leave|next|remove|(blacklist|bl)|(whitelist|wl)|clear)"*/}}
+
+
+{{$uID := .Message.Author.ID}}
+{{$rID := 861362179080847400}}
+{{$dbname := "queue"}}
+{{$blacklist := "queue_blacklist"}}
+
+
+{{if reFind "help" .Cmd}}
+  {{$display := "**__show__** - show queue list\n **__enter__** - enter the queue\n **__leave__** - leave the queue"}}
+  {{if or (hasRoleID 859510992174186539) (hasRoleID 817029577771319316) (hasRoleID 809424626550964235)}}
+    {{$display = printf "%s\n **__next__** - go to next candidate\n **__remove__** - remove a position from the list\n **__blacklist__** (alias bl) - blacklist a member from joining the queue\n **__whitelist__** (alias wl) - whitelist a blacklisted member\n **__clear__** - clear the queue" $display}}
+  {{end}}
+  {{sendMessage nil (cembed
+    "title" "❯ Stage queue commands"
+    "color" 14232643
+    "description" $display
+  ) }}
+  {{deleteTrigger}}
+{{else if reFind "show" .Cmd}}
+  {{$rank := 0}}
+  {{$display := ""}}
+  {{$users := dbTopEntries $dbname 10 0}}
+  {{range $users}}
+    {{if eq $rank 0}}
+      {{$display = printf "%s\n__%s__ - *Presenting*\n"
+            $display .User.Username
+      }}
+    {{else}}
+      {{$display = printf "%s\n• **%d.** __%s__ "
+            $display $rank .User.Username
+      }}
+    {{end}}
+    {{$rank = add $rank 1}}
+  {{end}}
+  {{if eq (len $display) 0}}
+    {{$display = "Queue is empty"}}
+  {{end}}
+  {{sendMessage nil (cembed
+    "title" "❯ Stage queue"
+    "color" 14232643
+    "description" $display
+  ) }}
+  {{deleteTrigger}}
+{{else if reFind "enter" .Cmd }}
+  {{if dbGet $uID $blacklist}}
+    {{sendMessage nil "You are blacklisted from entering the queue"}}
+  {{else if dbGet $uID $dbname}}
+    {{sendMessage nil "You are already in the queue"}}
+  {{else}}
+    {{$queue_users := dbTopEntries $dbname 100 0}}
+    {{range $queue_users}}
+      {{$i := dbIncr .UserID $dbname 1}}
+    {{end}}
+    {{dbSet $uID $dbname 1}}
+    {{sendMessage nil (printf "You're are now in the queue at position %d" (dbCount $dbname))}}
+    {{giveRoleID $uID $rID}}
+  {{end}}
+  {{deleteTrigger}}
+  {{deleteResponse 10}}
+{{else if reFind "leave" .Cmd}}
+  {{if not (dbGet $uID $dbname)}}
+    {{sendMessage nil "You are not in the queue"}}
+  {{else}}
+    {{$skip := false}}
+    {{$queue_users := dbTopEntries $dbname 100 0}}
+    {{range $queue_users}}
+      {{if not $skip}}
+        {{if eq .UserID $uID}}
+          {{dbDel $uID $dbname}}
+          {{sendMessage nil "You left the queue"}}
+          {{$skip = "true"}}
+        {{else}}
+          {{$i := dbIncr .UserID $dbname -1}}
+        {{end}}
+      {{end}}
+    {{end}}
+  {{end}}
+  {{deleteTrigger}}
+  {{deleteResponse 10}}
+{{else if reFind "next" .Cmd}}
+  {{if or (hasRoleID 859510992174186539) (hasRoleID 817029577771319316) (hasRoleID 809424626550964235)}}
+    {{$queue := dbTopEntries $dbname 3 0}}
+    {{$top_user := (index $queue 0).UserID}}
+    {{if eq (len $queue) 2}}
+      {{$second := (index $queue 1).UserID}}
+      {{if eq (len $queue) 3}}
+        {{$third := (index $queue 2).UserID}}
+        {{sendMessage nil (printf "It's your turn <@%d>!\n<@%d>, are you ready ? You are next." $second $third)}}
+      {{else}}
+        {{sendMessage nil (printf "It's your turn <@%d>!" $second)}}
+      {{end}}
+    {{else}}
+      {{sendMessage nil "The queue is over!"}}
+    {{end}}
+    {{dbDel $top_user $dbname}}
+    {{takeRoleID $top_user $rID}}
+  {{else}}
+    {{sendMessage nil "You need to be a stage moderator to use this command"}}
+  {{end}}
+  {{deleteTrigger}}
+{{else if reFind "remove" .Cmd}}
+  {{if or (hasRoleID 859510992174186539) (hasRoleID 817029577771319316) (hasRoleID 809424626550964235)}}
+    {{$pos := toInt (reFind `\d{1,2}` .Message.Content)}}
+    {{if gt $pos (dbCount $dbname)}}
+      {{sendMessage nil (printf "No user at this position. The queue has a length of %d" (dbCount $dbname))}}
+    {{else}}
+      {{$skip := false}}
+      {{$rank := 0}}
+      {{$queue_users := dbTopEntries $dbname 100 0}}
+      {{range $queue_users}}
+        {{if not $skip}}
+          {{$rank = add $rank 1}}
+          {{if eq $rank $pos}}
+            {{dbDel .UserID $dbname}}
+            {{sendMessage nil (printf "User %s at position %d has been removed from the queue" (userArg .UserID).Username $pos)}}
+            {{$skip = "true"}}
+          {{else}}
+            {{$i := dbIncr .UserID $dbname -1}}
+          {{end}}
+        {{end}}
+      {{end}}
+    {{end}}
+  {{else}}
+    {{sendMessage nil "You need to be a stage moderator to use this command"}}
+  {{end}}
+  {{deleteTrigger}}
+  {{deleteResponse 10}}
+{{else if reFind "(blacklist|bl)" .Cmd}}
+  {{if or (hasRoleID 859510992174186539) (hasRoleID 817029577771319316) (hasRoleID 809424626550964235)}}
+    {{$blackID := 227731811034202114}}
+    {{if .Message.Mentions}}
+      {{$blackID = (index .Message.Mentions 0)}}
+    {{else}}
+      {{$blackID = toInt (reFind `(\d{17,19})` .Message.Content)}}
+    {{end}}
+    {{if dbGet $blackID $blacklist}}
+      {{sendMessage nil (printf "User %s is already blacklisted" (userArg $blackID).Username)}}
+    {{else}}
+      {{dbSet $blackID $blacklist "blacklisted"}}
+      {{dbDel $blackID $dbname}}
+      {{sendMessage nil (printf "User %s blacklisted" (userArg $blackID).Username)}}
+    {{end}}
+  {{else}}
+    {{sendMessage nil "You need to be a stage moderator to use this command"}}
+  {{end}}
+  {{deleteTrigger}}
+  {{deleteResponse 10}}
+{{else if reFind "(whitelist|wl)" .Cmd}}
+  {{if or (hasRoleID 859510992174186539) (hasRoleID 817029577771319316) (hasRoleID 809424626550964235)}}
+    {{$whiteID := 227731811034202114}}
+    {{if .Message.Mentions}}
+      {{$whiteID = (index .Message.Mentions 0)}}
+    {{else}}
+      {{$whiteID = toInt (reFind `(\d{17,19})` .Message.Content)}}
+    {{end}}
+    {{if dbGet $whiteID $blacklist}}
+      {{dbDel $whiteID $blacklist}}
+      {{sendMessage nil (printf "User %s whitelisted" (userArg $whiteID).Username)}}
+    {{else}}
+      {{sendMessage nil (printf "User %s is not blacklisted" (userArg $whiteID).Username)}}
+    {{end}}
+  {{else}}
+    {{sendMessage nil "You need to be a stage moderator to use this command"}}
+  {{end}}
+  {{deleteTrigger}}
+  {{deleteResponse 10}}
+{{else if reFind "clear" .Cmd}}
+  {{if or (hasRoleID 859510992174186539) (hasRoleID 817029577771319316) (hasRoleID 809424626550964235)}}
+    {{$users := dbTopEntries $dbname 100 0}}
+    {{range $users}}
+      {{dbDel .UserID $dbname}}
+    {{end}}
+    {{sendMessage nil "Queue cleared"}}
+  {{else}}
+    {{sendMessage nil "You need to be a stage moderator to use this command"}}
+  {{end}}
+  {{deleteTrigger}}
+  {{deleteResponse 10}}
+{{end}}

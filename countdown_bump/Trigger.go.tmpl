@@ -1,0 +1,15 @@
+{{/* Triger type: Exact */}}
+{{/* Triger: !d bump */}}
+
+{{$name := "bumpcooldown"}}
+{{$length := 7200}}
+{{$key := 57}}
+
+{{if (dbGet $key $name)}}
+  :warning: This command is still on cooldown for: {{humanizeDurationSeconds ((dbGet $key $name).ExpiresAt.Sub currentTime)}}.
+{{else}}{{dbSetExpire $key $name "cooldown" $length}}
+  {{$motif := "bump"}}
+  {{$t := currentTime.Add 7200000000000}}
+  {{$mID := sendMessageRetID nil (joinStr  "" "countdown starting..." $t.String)}}
+  {{execCC 58 nil 0 (sdict "MessageID" $mID "T" $t "Message" ($motif)) }}
+{{end}}

@@ -1,0 +1,29 @@
+{{/* Trigger type : Regex */}}
+{{/*Trigger : "(-bump)\s+(help|team\s+(A|B)|join|leave)"*/}}
+
+{{$uID := .Message.Author.ID}}
+{{$rID := 861362179080847400}}
+{{$dbname := "bump_team"}}
+{{$dbA := "bump_team_A"}}
+{{$dbB := "bump_team_B"}}
+{{$dbID := 500}}
+
+
+{{if reFind "help" .Cmd}}
+  {{$display := "`team` - show the team lists\n `join <A|B>` - join one of the two team (A or B)\n `leave` - leave the team you are in"}}
+  {{sendMessage nil (cembed
+    "title" "❯ Stage queue commands"
+    "color" 14232643
+    "description" $display
+  ) }}
+  {{deleteTrigger}}
+{{else if reFind "team A" .Cmd}}
+  {{$team := "A"}}
+  {{dbSet $uID $dbname "A"}}
+  {{dbSet $dbID $dbA $uID}}
+  {{$display := "You successfully joined Team A!"}}
+{{else if reFind "team B" .Cmd}}
+  {{$team := "B"}}
+  {{$display := "You successfully joined Team B!"}}
+  {{dbSet $uID $dbname "B"}}
+  {{dbSet $dbID $dbB $uID}}
